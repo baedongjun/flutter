@@ -14,20 +14,40 @@ class DatabaseService {
   }
 
   Future<void> addDropin(String userId, Map<String, dynamic> dropinData) async {
-    await _db.collection('users').doc(userId).collection('dropins').add(dropinData);
-    // µå¶øÀÎ È½¼ö Áõ°¡
-    await _db.collection('users').doc(userId).update({
-      'dropinCount': FieldValue.increment(1),
-    });
+    try {
+      final userRef = _db.collection('users').doc(userId);
+      
+      await _db.runTransaction((transaction) async {
+        final userDoc = await transaction.get(userRef);
+        
+        // ë“œëì¸ ì¶”ê°€
+        await userRef.collection('dropins').add(dropinData);
+        
+        // ì¹´ìš´íŠ¸ ì¦ê°€
+        final currentCount = userDoc.data()?['dropinCount'] ?? 0;
+        transaction.update(userRef, {
+          'dropinCount': currentCount + 1,
+          'lastDropinDate': DateTime.now(),
+        });
+      });
+    } catch (e) {
+      throw Exception('ë“œëì¸ ì¶”ê°€ ì‹¤íŒ¨: $e');
+    }
   }
 
   Future<List<Map<String, dynamic>>> getRankings() async {
-    final snapshot = await _db.collection('users').orderBy('dropinCount', descending: true).limit(10).get();
-    return snapshot.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
+    final snapshot = await _db.collection('users')
+        .orderBy('dropinCount', descending: true)
+        .limit(10)
+        .get();
+    return snapshot.docs.map((doc) => doc.data()).toList();
   }
 
   Future<List<Map<String, dynamic>>> getTopBoxes() async {
-    final snapshot = await _db.collection('boxes').orderBy('dropinCount', descending: true).limit(10).get();
-    return snapshot.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
+    final snapshot = await _db.collection('boxes')
+        .orderBy('dropinCount', descending: true)
+        .limit(10)
+        .get();
+    return snapshot.docs.map((doc) => doc.data()).toList();
   }
 }
